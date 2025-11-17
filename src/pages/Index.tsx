@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -30,39 +30,40 @@ interface PlayerData {
 }
 
 const ADMIN_CODE = '727372894819483-38';
+const API_URL = 'https://functions.poehali.dev/9eac7872-8c6c-4623-82d4-a4b258b04df0';
 
 const Index = () => {
   const [userRole, setUserRole] = useState<'player' | 'admin' | null>(null);
   const [playerData, setPlayerData] = useState<PlayerData>({ nickname: '', server: '' });
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [adminCode, setAdminCode] = useState('');
-  const [complaints, setComplaints] = useState<Complaint[]>([
-    {
-      id: 1,
-      playerNickname: 'ProGamer123',
-      server: 'AKSGOD',
-      title: 'Читер на сервере',
-      description: 'Игрок использует аимбот и валлхак',
-      status: 'pending',
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: 2,
-      playerNickname: 'WarriorX',
-      server: 'PINK',
-      title: 'Багоюз',
-      description: 'Игрок использует баг с бесконечными патронами',
-      status: 'resolved',
-      adminResponse: 'Игрок забанен на 30 дней',
-      createdAt: new Date(Date.now() - 86400000).toISOString(),
-    },
-  ]);
+  const [complaints, setComplaints] = useState<Complaint[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const [newComplaint, setNewComplaint] = useState({
     title: '',
     description: '',
     imageUrl: '',
   });
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+
+  const loadComplaints = async () => {
+    try {
+      setIsLoading(true);
+      const response = await fetch(API_URL);
+      const data = await response.json();
+      setComplaints(data);
+    } catch (error) {
+      toast.error('Ошибка загрузки жалоб');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      loadComplaints();
+    }
+  }, [isAuthenticated]);
 
   const handlePlayerLogin = () => {
     if (!playerData.nickname || !playerData.server) {
@@ -82,42 +83,78 @@ const Index = () => {
     }
   };
 
-  const handleCreateComplaint = () => {
+  const handleCreateComplaint = async () => {
     if (!newComplaint.title || !newComplaint.description) {
       toast.error('Заполните все обязательные поля!');
       return;
     }
 
-    const complaint: Complaint = {
-      id: Date.now(),
-      playerNickname: playerData.nickname,
-      server: playerData.server,
-      title: newComplaint.title,
-      description: newComplaint.description,
-      imageUrl: newComplaint.imageUrl || undefined,
-      status: 'pending',
-      createdAt: new Date().toISOString(),
-    };
+    try {
+      const response = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          playerNickname: playerData.nickname,
+          server: playerData.server,
+          title: newComplaint.title,
+          description: newComplaint.description,
+          imageUrl: newComplaint.imageUrl || null,
+        }),
+      });
 
-    setComplaints([complaint, ...complaints]);
-    setNewComplaint({ title: '', description: '', imageUrl: '' });
-    setIsCreateDialogOpen(false);
-    toast.success('Жалоба опубликована!');
+      if (response.ok) {
+        await loadComplaints();
+        setNewComplaint({ title: '', description: '', imageUrl: '' });
+        setIsCreateDialogOpen(false);
+        toast.success('Жалоба опубликована!');
+      }
+    } catch (error) {
+      toast.error('Ошибка создания жалобы');
+    }
   };
 
-  const handleDeleteComplaint = (id: number) => {
-    setComplaints(complaints.filter((c) => c.id !== id));
-    toast.success('Жалоба удалена');
+  const handleDeleteComplaint = async (id: number) => {
+    try {
+      const response = await fetch(`${API_URL}/${id}`, { method: 'DELETE' });
+      if (response.ok) {
+        await loadComplaints();
+        toast.success('Жалоба удалена');
+      }
+    } catch (error) {
+      toast.error('Ошибка удаления');
+    }
   };
 
-  const handleUpdateStatus = (id: number, status: ComplaintStatus) => {
-    setComplaints(complaints.map((c) => (c.id === id ? { ...c, status } : c)));
-    toast.success('Статус обновлен');
+  const handleUpdateStatus = async (id: number, status: ComplaintStatus) => {
+    try {
+      const response = await fetch(`${API_URL}/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      if (response.ok) {
+        await loadComplaints();
+        toast.success('Статус обновлен');
+      }
+    } catch (error) {
+      toast.error('Ошибка обновления');
+    }
   };
 
-  const handleAdminResponse = (id: number, response: string) => {
-    setComplaints(complaints.map((c) => (c.id === id ? { ...c, adminResponse: response } : c)));
-    toast.success('Ответ отправлен');
+  const handleAdminResponse = async (id: number, responseText: string) => {
+    try {
+      const response = await fetch(`${API_URL}/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ adminResponse: responseText }),
+      });
+      if (response.ok) {
+        await loadComplaints();
+        toast.success('Ответ отправлен');
+      }
+    } catch (error) {
+      toast.error('Ошибка отправки ответа');
+    }
   };
 
   const getStatusBadge = (status: ComplaintStatus) => {
@@ -144,29 +181,29 @@ const Index = () => {
               alt="AKSGOD Logo" 
               className="w-32 h-32 mx-auto mb-6 rounded-full border-4 border-primary shadow-2xl"
             />
-            <h1 className="text-5xl font-bold text-primary mb-2 tracking-wider">AKSGOD</h1>
+            <h1 className="text-4xl md:text-5xl font-bold text-primary mb-2 tracking-wider">AKSGOD</h1>
             <p className="text-muted-foreground text-lg">Форум игроков</p>
           </div>
 
           <Card className="bg-card/50 backdrop-blur-sm border-2 border-primary/20">
             <CardHeader>
-              <CardTitle className="text-2xl text-center">Выберите роль</CardTitle>
-              <CardDescription className="text-center">Войдите как игрок или администратор</CardDescription>
+              <CardTitle className="text-xl md:text-2xl text-center">Выберите роль</CardTitle>
+              <CardDescription className="text-center text-sm md:text-base">Войдите как игрок или администратор</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               <Button 
                 onClick={() => setUserRole('player')} 
-                className="w-full h-12 text-lg font-semibold bg-primary hover:bg-primary/90 text-primary-foreground"
+                className="w-full h-12 text-base md:text-lg font-semibold bg-primary hover:bg-primary/90 text-primary-foreground"
               >
-                <Icon name="Gamepad2" className="mr-2" size={24} />
+                <Icon name="Gamepad2" className="mr-2" size={20} />
                 Игрок
               </Button>
               <Button 
                 onClick={() => setUserRole('admin')} 
                 variant="outline" 
-                className="w-full h-12 text-lg font-semibold border-2 border-primary text-primary hover:bg-primary/10"
+                className="w-full h-12 text-base md:text-lg font-semibold border-2 border-primary text-primary hover:bg-primary/10"
               >
-                <Icon name="ShieldCheck" className="mr-2" size={24} />
+                <Icon name="ShieldCheck" className="mr-2" size={20} />
                 Администратор
               </Button>
             </CardContent>
@@ -266,24 +303,25 @@ const Index = () => {
     return (
       <div className="min-h-screen bg-gradient-to-br from-black via-zinc-900 to-black p-4">
         <div className="max-w-7xl mx-auto">
-          <div className="flex items-center justify-between mb-8 pt-4">
-            <div className="flex items-center gap-4">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6 md:mb-8 pt-4">
+            <div className="flex items-center gap-3 md:gap-4">
               <img 
                 src="https://cdn.poehali.dev/files/ae91bf19-82c7-4ac5-8c61-ffb2f089d047.jpg" 
                 alt="AKSGOD" 
-                className="w-16 h-16 rounded-full border-2 border-primary"
+                className="w-12 h-12 md:w-16 md:h-16 rounded-full border-2 border-primary flex-shrink-0"
               />
               <div>
-                <h1 className="text-4xl font-bold text-primary">Админ-панель</h1>
-                <p className="text-muted-foreground">Управление жалобами игроков</p>
+                <h1 className="text-2xl md:text-4xl font-bold text-primary">Админ-панель</h1>
+                <p className="text-muted-foreground text-xs md:text-base">Управление жалобами</p>
               </div>
             </div>
             <Button 
               onClick={() => { setIsAuthenticated(false); setUserRole(null); }} 
               variant="outline" 
-              className="border-primary text-primary hover:bg-primary/10"
+              className="border-primary text-primary hover:bg-primary/10 w-full md:w-auto"
+              size="sm"
             >
-              <Icon name="LogOut" className="mr-2" size={18} />
+              <Icon name="LogOut" className="mr-2" size={16} />
               Выйти
             </Button>
           </div>
@@ -293,12 +331,12 @@ const Index = () => {
               <Card key={complaint.id} className="bg-card/50 backdrop-blur-sm border-2 border-primary/20 hover:border-primary/40 transition-all">
                 <CardHeader>
                   <div className="flex items-start justify-between">
-                    <div className="space-y-1">
-                      <CardTitle className="text-xl">{complaint.title}</CardTitle>
+                    <div className="space-y-1 flex-1">
+                      <CardTitle className="text-base md:text-xl">{complaint.title}</CardTitle>
                       <CardDescription>
-                        <div className="flex items-center gap-2 text-sm">
-                          <Icon name="User" size={16} />
-                          {complaint.playerNickname}
+                        <div className="flex flex-wrap items-center gap-1 md:gap-2 text-xs md:text-sm">
+                          <Icon name="User" size={14} className="md:w-4 md:h-4" />
+                          <span className="break-all">{complaint.playerNickname}</span>
                           <span className="text-muted-foreground">•</span>
                           <Icon name="Server" size={16} />
                           {complaint.server}
@@ -311,9 +349,9 @@ const Index = () => {
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <p className="text-foreground">{complaint.description}</p>
+                  <p className="text-foreground text-sm md:text-base">{complaint.description}</p>
                   {complaint.imageUrl && (
-                    <img src={complaint.imageUrl} alt="Доказательство" className="rounded-lg max-h-64 object-cover" />
+                    <img src={complaint.imageUrl} alt="Доказательство" className="rounded-lg max-h-48 md:max-h-64 object-cover w-full" />
                   )}
                   
                   {complaint.adminResponse && (
@@ -323,9 +361,9 @@ const Index = () => {
                     </div>
                   )}
 
-                  <div className="flex flex-wrap gap-2 pt-2">
+                  <div className="flex flex-col sm:flex-row flex-wrap gap-2 pt-2">
                     <Select onValueChange={(value) => handleUpdateStatus(complaint.id, value as ComplaintStatus)}>
-                      <SelectTrigger className="w-48 bg-input border-primary/30">
+                      <SelectTrigger className="w-full sm:w-48 bg-input border-primary/30">
                         <SelectValue placeholder="Изменить статус" />
                       </SelectTrigger>
                       <SelectContent>
@@ -337,15 +375,15 @@ const Index = () => {
 
                     <Dialog>
                       <DialogTrigger asChild>
-                        <Button variant="outline" className="border-primary text-primary hover:bg-primary/10">
-                          <Icon name="MessageSquare" className="mr-2" size={18} />
+                        <Button variant="outline" className="border-primary text-primary hover:bg-primary/10 w-full sm:w-auto" size="sm">
+                          <Icon name="MessageSquare" className="mr-2" size={16} />
                           Ответить
                         </Button>
                       </DialogTrigger>
-                      <DialogContent className="bg-card border-2 border-primary/20">
+                      <DialogContent className="bg-card border-2 border-primary/20 max-w-[90vw] md:max-w-2xl">
                         <DialogHeader>
-                          <DialogTitle>Ответ на жалобу</DialogTitle>
-                          <DialogDescription>Напишите ответ игроку</DialogDescription>
+                          <DialogTitle className="text-lg md:text-xl">Ответ на жалобу</DialogTitle>
+                          <DialogDescription className="text-sm">Напишите ответ игроку</DialogDescription>
                         </DialogHeader>
                         <Textarea 
                           placeholder="Ваш ответ..."
@@ -370,32 +408,32 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-black via-zinc-900 to-black p-4">
       <div className="max-w-7xl mx-auto">
-        <div className="flex items-center justify-between mb-8 pt-4">
-          <div className="flex items-center gap-4">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6 md:mb-8 pt-4">
+          <div className="flex items-center gap-3 md:gap-4 w-full md:w-auto">
             <img 
               src="https://cdn.poehali.dev/files/ae91bf19-82c7-4ac5-8c61-ffb2f089d047.jpg" 
               alt="AKSGOD" 
-              className="w-16 h-16 rounded-full border-2 border-primary"
+              className="w-12 h-12 md:w-16 md:h-16 rounded-full border-2 border-primary flex-shrink-0"
             />
-            <div>
-              <h1 className="text-4xl font-bold text-primary">Форум AKSGOD</h1>
-              <p className="text-muted-foreground">
+            <div className="min-w-0 flex-1">
+              <h1 className="text-xl md:text-4xl font-bold text-primary truncate">Форум AKSGOD</h1>
+              <p className="text-muted-foreground text-xs md:text-base truncate">
                 {playerData.nickname} • {playerData.server}
               </p>
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
             <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
               <DialogTrigger asChild>
-                <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
-                  <Icon name="Plus" className="mr-2" size={18} />
+                <Button className="bg-primary hover:bg-primary/90 text-primary-foreground w-full sm:w-auto" size="sm">
+                  <Icon name="Plus" className="mr-2" size={16} />
                   Создать жалобу
                 </Button>
               </DialogTrigger>
-              <DialogContent className="bg-card border-2 border-primary/20 max-w-2xl">
+              <DialogContent className="bg-card border-2 border-primary/20 max-w-[90vw] md:max-w-2xl">
                 <DialogHeader>
-                  <DialogTitle className="text-2xl">Новая жалоба</DialogTitle>
-                  <DialogDescription>Опишите проблему и приложите доказательства</DialogDescription>
+                  <DialogTitle className="text-lg md:text-2xl">Новая жалоба</DialogTitle>
+                  <DialogDescription className="text-sm">Опишите проблему и приложите доказательства</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4">
                   <div className="space-y-2">
@@ -437,9 +475,10 @@ const Index = () => {
             <Button 
               onClick={() => { setIsAuthenticated(false); setUserRole(null); setPlayerData({ nickname: '', server: '' }); }} 
               variant="outline" 
-              className="border-primary text-primary hover:bg-primary/10"
+              className="border-primary text-primary hover:bg-primary/10 w-full sm:w-auto"
+              size="sm"
             >
-              <Icon name="LogOut" className="mr-2" size={18} />
+              <Icon name="LogOut" className="mr-2" size={16} />
               Выйти
             </Button>
           </div>
@@ -450,17 +489,17 @@ const Index = () => {
             <Card key={complaint.id} className="bg-card/50 backdrop-blur-sm border-2 border-primary/20 hover:border-primary/40 transition-all">
               <CardHeader>
                 <div className="flex items-start justify-between">
-                  <div className="space-y-1">
-                    <CardTitle className="text-xl">{complaint.title}</CardTitle>
+                  <div className="space-y-1 flex-1">
+                    <CardTitle className="text-base md:text-xl">{complaint.title}</CardTitle>
                     <CardDescription>
-                      <div className="flex items-center gap-2 text-sm">
-                        <Icon name="User" size={16} />
-                        {complaint.playerNickname}
+                      <div className="flex flex-wrap items-center gap-1 md:gap-2 text-xs md:text-sm">
+                        <Icon name="User" size={14} className="md:w-4 md:h-4" />
+                        <span className="break-all">{complaint.playerNickname}</span>
                         <span className="text-muted-foreground">•</span>
-                        <Icon name="Server" size={16} />
+                        <Icon name="Server" size={14} className="md:w-4 md:h-4" />
                         {complaint.server}
                         <span className="text-muted-foreground">•</span>
-                        {new Date(complaint.createdAt).toLocaleDateString('ru-RU')}
+                        <span className="whitespace-nowrap">{new Date(complaint.createdAt).toLocaleDateString('ru-RU')}</span>
                       </div>
                     </CardDescription>
                   </div>
@@ -468,15 +507,15 @@ const Index = () => {
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                <p className="text-foreground">{complaint.description}</p>
+                <p className="text-foreground text-sm md:text-base break-words">{complaint.description}</p>
                 {complaint.imageUrl && (
-                  <img src={complaint.imageUrl} alt="Доказательство" className="rounded-lg max-h-64 object-cover border border-primary/20" />
+                  <img src={complaint.imageUrl} alt="Доказательство" className="rounded-lg max-h-48 md:max-h-64 object-cover border border-primary/20 w-full" />
                 )}
                 
                 {complaint.adminResponse && (
-                  <div className="bg-primary/10 border border-primary/30 rounded-lg p-4">
-                    <p className="text-sm font-semibold text-primary mb-1">Ответ администратора:</p>
-                    <p className="text-sm">{complaint.adminResponse}</p>
+                  <div className="bg-primary/10 border border-primary/30 rounded-lg p-3 md:p-4">
+                    <p className="text-xs md:text-sm font-semibold text-primary mb-1">Ответ администратора:</p>
+                    <p className="text-xs md:text-sm break-words">{complaint.adminResponse}</p>
                   </div>
                 )}
 
@@ -485,9 +524,9 @@ const Index = () => {
                     onClick={() => handleDeleteComplaint(complaint.id)} 
                     variant="destructive" 
                     size="sm"
-                    className="mt-2"
+                    className="mt-2 w-full sm:w-auto"
                   >
-                    <Icon name="Trash2" className="mr-2" size={16} />
+                    <Icon name="Trash2" className="mr-2" size={14} />
                     Удалить жалобу
                   </Button>
                 )}
