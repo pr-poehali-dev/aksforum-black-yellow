@@ -40,7 +40,7 @@ const Index = () => {
     {
       id: 1,
       playerNickname: 'ProGamer123',
-      server: 'EU-1',
+      server: 'AKSGOD',
       title: 'Читер на сервере',
       description: 'Игрок использует аимбот и валлхак',
       status: 'pending',
@@ -49,7 +49,7 @@ const Index = () => {
     {
       id: 2,
       playerNickname: 'WarriorX',
-      server: 'RU-2',
+      server: 'PINK',
       title: 'Багоюз',
       description: 'Игрок использует баг с бесконечными патронами',
       status: 'resolved',
@@ -220,12 +220,10 @@ const Index = () => {
                       <SelectValue placeholder="Выберите сервер" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="EU-1">EU-1</SelectItem>
-                      <SelectItem value="EU-2">EU-2</SelectItem>
-                      <SelectItem value="RU-1">RU-1</SelectItem>
-                      <SelectItem value="RU-2">RU-2</SelectItem>
-                      <SelectItem value="US-1">US-1</SelectItem>
-                      <SelectItem value="US-2">US-2</SelectItem>
+                      <SelectItem value="AKSGOD">AKSGOD</SelectItem>
+                      <SelectItem value="PINK">PINK</SelectItem>
+                      <SelectItem value="GOLD">GOLD</SelectItem>
+                      <SelectItem value="RED">RED</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
